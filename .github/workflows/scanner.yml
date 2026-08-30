@@ -3,7 +3,10 @@ name: AuraCloud Node Scanner
 on:
   schedule:
     - cron: '*/5 * * * *'  # Runs automatically every 5 minutes 24/7
-  workflow_dispatch:        # Enables the manual "Run workflow" button in GitHub Actions
+  workflow_dispatch:        # Enables manual execution button
+
+permissions:
+  contents: write
 
 jobs:
   scan:
@@ -28,3 +31,11 @@ jobs:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
         run: python scanner.py
+
+      - name: Commit and push status.json
+        run: |
+          git config local user.email "action@github.com"
+          git config local user.name "GitHub Action"
+          git add status.json
+          git commit -m "auto: update status telemetry" || exit 0
+          git push
