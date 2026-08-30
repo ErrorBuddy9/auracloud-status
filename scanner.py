@@ -75,6 +75,14 @@ def parse_rows(res_result):
         parsed.append(item)
     return parsed
 
+def safe_fetch(stmt):
+    try:
+        res = query_turso(stmt)
+        return parse_rows(res.get("results", [{}])[0])
+    except Exception as e:
+        print(f"Notice: Optional query [{stmt}] returned empty/error: {e}")
+        return []
+
 def main():
     print("Starting node telemetry scan...")
     try:
@@ -100,23 +108,18 @@ def main():
                 [name, status]
             )
 
-        # 3. Export consolidated status telemetry to status.json
+        # 3. Safely gather telemetry for status.json
         print("Exporting telemetry to status.json...")
-        export_payload = query_turso("SELECT id, name FROM nodes WHERE is_active = 1;")
-        export_live = query_turso("SELECT id, node_name, status, COALESCE(created_at, timestamp, CURRENT_TIMESTAMP) AS created_at FROM node_history ORDER BY id DESC LIMIT 500;")
-        export_daily = query_turso("SELECT node_name, minutes_offline, final_status, status_day FROM node_daily ORDER BY id DESC LIMIT 500;")
-        export_adv = query_turso("SELECT content FROM advisories ORDER BY id DESC LIMIT 1;")
-
-        nodes_data = parse_rows(export_payload.get("results", [{}])[0])
-        live_data = parse_rows(export_live.get("results", [{}])[0])
-        daily_data = parse_rows(export_daily.get("results", [{}])[0])
-        adv_data = parse_rows(export_adv.get("results", [{}])[0])
+        nodes_data = safe_fetch("SELECT id, name FROM nodes WHERE is_active = 1;")
+        live_data = safe_fetch("SELECT id, node_name, status, COALESCE(created_at, timestamp, CURRENT_TIMESTAMP) AS created_at FROM node_history ORDER BY id DESC LIMIT 500;")
+        daily_data = safe_fetch("SELECT node_name, minutes_offline, final_status, status_day FROM node_daily ORDER BY id DESC LIMIT 500;")
+        adv_data = safe_fetch("SELECT content FROM advisories ORDER BY id DESC LIMIT 1;")
 
         status_json_data = {
             "nodes": nodes_data,
             "live": live_data,
             "daily": daily_data,
-            "notes": adv_data[0]["content"] if adv_data else "All systems operational."
+            "notes": adv_data[0]["content"] if adv_data and "content" in adv_data[0] else "All systems operational."
         }
 
         with open("status.json", "w") as f:
